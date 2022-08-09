@@ -12,8 +12,6 @@ var GuildID = flag.String("guild", "", "Id of your guild")
 
 func goMain() int {
 	flag.Parse()
-	*Token = "Mzk0MTU5NTIzOTIyOTY4NTc2.GyeJqT.QOmAA7oeccFHzMveY9kSEIqpgmgOf_r7O_BVjY"
-	*GuildID = "394168858950500365"
 
 	s := bot.Create(*Token)
 	if s == nil {
