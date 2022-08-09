@@ -21,14 +21,6 @@ type BotCommand struct {
 	Handler func(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
-const cmdpfx = "yotei"
-
-var nameToCommandMap = map[string]BotCommand{
-	HelpCommand.Name: HelpCommand,
-	PollCommand.Name: PollCommand,
-	VoteCommand.Name: VoteCommand,
-}
-
 func Create(botToken string) *discordgo.Session {
 	s, err := discordgo.New("Bot " + botToken)
 	if err != nil {
@@ -49,20 +41,10 @@ func Start(s *discordgo.Session, gid string) int {
 		return 1
 	}
 
-	// cmds := InitCommand(s, gid)
-
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
-
-	// for _, cmd := range cmds {
-	// 	err := s.ApplicationCommandDelete(s.State.User.ID, gid, cmd.Name)
-	// 	if err != nil {
-	// 		log.Println("failed to delete a command. ", err)
-	// 		return 1
-	// 	}
-	// }
 
 	s.Close()
 	return 0
@@ -177,38 +159,4 @@ func FormatShecule(list []time.Time) *map[int][]time.Time {
 
 func HandleReactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 
-}
-
-func InitCommand(s *discordgo.Session, gid string) []*discordgo.ApplicationCommand {
-	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if cmd, ok := nameToCommandMap[i.ApplicationCommandData().Name]; ok {
-			cmd.Handler(s, i)
-		}
-	})
-
-	return RegisterCommands(s, gid)
-}
-
-func RegisterCommands(s *discordgo.Session, gid string) []*discordgo.ApplicationCommand {
-	registeredCommands := make([]*discordgo.ApplicationCommand, 0, len(nameToCommandMap))
-
-	for _, cmd := range nameToCommandMap {
-		registered := RegisterCommand(s, gid, &cmd.Command)
-		if registered != nil {
-			registeredCommands = append(registeredCommands, registered)
-		}
-	}
-	return registeredCommands
-}
-
-func RegisterCommand(s *discordgo.Session, guildID string, cmd *discordgo.ApplicationCommand) *discordgo.ApplicationCommand {
-	appID := s.State.User.ID
-
-	cmd, err := s.ApplicationCommandCreate(appID, guildID, cmd)
-	if err != nil {
-		fmt.Println("Failed to add the command: ", err)
-		return nil
-	}
-
-	return cmd
 }
