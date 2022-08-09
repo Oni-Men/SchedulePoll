@@ -15,6 +15,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const YOTEI_PREFIX = "!yotei"
+
 type BotCommand struct {
 	Name    string
 	Command discordgo.ApplicationCommand
@@ -93,16 +95,13 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func ParseSchedule(content string) ([]time.Time, error) {
-	parts := strings.Split(content, ":")
-	if len(parts) != 2 {
+	if !strings.HasPrefix(content, YOTEI_PREFIX) {
 		return []time.Time{}, errors.New("invalid format #1")
 	}
 
-	if parts[0] != "!予定投票" {
-		return []time.Time{}, errors.New("invalid format #2")
-	}
+	content = strings.TrimPrefix(content, YOTEI_PREFIX)
 
-	inputs := strings.Split(parts[1], ",")
+	inputs := strings.Split(content, ",")
 	schedules := make([]time.Time, 0, len(inputs))
 
 	var t time.Time
