@@ -4,6 +4,8 @@ type PollManager struct {
 	polls map[string]*Poll
 }
 
+var manager *PollManager = CreatePollManager()
+
 func CreatePollManager() *PollManager {
 	pm := PollManager{
 		polls: make(map[string]*Poll),
@@ -12,15 +14,14 @@ func CreatePollManager() *PollManager {
 	return &pm
 }
 
-func (pm *PollManager) AddPoll() {
-	poll := CreatePoll()
-	pm.polls[poll.ID] = poll
+func AddPoll(poll *Poll) {
+	manager.polls[poll.ID] = poll
 }
 
-func (pm *PollManager) GetPoll(id string) *Poll {
-	return pm.polls[id]
+func GetPoll(id string) *Poll {
+	return manager.polls[id]
 }
 
-func (pm *PollManager) RemovePol(id string) {
-	delete(pm.polls, id)
+func RemovePoll(id string) {
+	delete(manager.polls, id)
 }

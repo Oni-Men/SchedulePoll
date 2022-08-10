@@ -1,6 +1,6 @@
-package bot
+package emoji
 
-var RegionalIndicators = [...]string{
+var ABCs = [...]string{
 	"🇦",
 	"🇧",
 	"🇨",
@@ -28,3 +28,8 @@ var RegionalIndicators = [...]string{
 	"🇾",
 	"🇿",
 }
+
+const (
+	ProgressFG = "◻️"
+	ProgressBG = "◼️"
+)

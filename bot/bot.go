@@ -6,16 +6,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sort"
-	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
+	"github.com/Oni-Men/SchedulePoll/emoji"
+	"github.com/Oni-Men/SchedulePoll/poll"
+	"github.com/Oni-Men/SchedulePoll/printer"
 	"github.com/bwmarrin/discordgo"
 )
-
-const YOTEI_PREFIX = "!yotei"
 
 type BotCommand struct {
 	Name    string
@@ -35,6 +33,7 @@ func Create(botToken string) *discordgo.Session {
 func Start(s *discordgo.Session, gid string) int {
 	s.AddHandler(HandleMessageCreate)
 	s.AddHandler(HandleReactionAdd)
+	s.AddHandler(HandleReactionRemove)
 	s.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuildMessageReactions
 
 	err := s.Open()
@@ -53,40 +52,33 @@ func Start(s *discordgo.Session, gid string) int {
 }
 
 func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	parsed, err := ParseSchedule(m.Content)
-	if err != nil {
+	parsed, err := ParseScheduleInput(m.Content)
+	if parsed == nil {
 		return
 	}
 
-	s.ChannelMessageDelete(m.ChannelID, m.ID)
-
-	formatted := FormatShecule(parsed)
-
-	var c int
-	b := NewEmbedBuilder()
-	b.Title(":calendar_spiral: 予定投票 :calendar_spiral:")
-	for year, list := range *formatted {
-		var value string
-		for _, t := range list {
-			emoji := RegionalIndicators[c]
-			value += emoji + " **" + t.Format("01/02") + "**\n\n"
-			c++
+	if err != nil {
+		fmt.Println(err)
+		_, err = s.ChannelMessageSendReply(m.ChannelID, err.Error(), m.MessageReference)
+		if err != nil {
+			fmt.Println(err)
 		}
-
-		b.AddField(&discordgo.MessageEmbedField{
-			Name:   strconv.Itoa(year) + "年",
-			Value:  value,
-			Inline: false,
-		})
+		return
 	}
 
-	msg, err := s.ChannelMessageSendEmbed(m.ChannelID, b.Build(s))
+	p := poll.CreatePoll()
+	p.AddColumnsAll(parsed)
+	poll.AddPoll(p)
+
+	embed := printer.PrintPoll(p)
+	msg, err := s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	for i := 0; i < c; i++ {
-		emoji := RegionalIndicators[i]
+	//Add reactions to vote
+	for i := 0; i < len(p.Columns); i++ {
+		emoji := emoji.ABCs[i]
 		err = s.MessageReactionAdd(m.ChannelID, msg.ID, emoji)
 		if err != nil {
 			fmt.Println(err)
@@ -94,68 +86,135 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-func ParseSchedule(content string) ([]time.Time, error) {
-	if !strings.HasPrefix(content, YOTEI_PREFIX) {
-		return []time.Time{}, errors.New("invalid format #1")
-	}
-
-	content = strings.TrimPrefix(content, YOTEI_PREFIX)
-
-	inputs := strings.Split(content, ",")
-	schedules := make([]time.Time, 0, len(inputs))
-
-	var t time.Time
-	var err error = nil
-	year, month, day := time.Now().Date()
-	for _, input := range inputs {
-		split := strings.Split(strings.TrimSpace(input), "/")
-
-		if len(split) == 3 {
-			if year, err = strconv.Atoi(split[0]); err != nil {
-				break
-			}
-			split = split[1:]
-		}
-
-		if len(split) == 2 {
-			_month, err := strconv.Atoi(split[0])
-			if err != nil {
-				break
-			}
-			month = time.Month(_month)
-			split = split[1:]
-		}
-
-		if len(split) == 1 {
-			if day, err = strconv.Atoi(split[0]); err != nil {
-				break
-			}
-		}
-
-		t = time.Date(year, month, day, 0, 0, 0, 0, time.Local)
-		schedules = append(schedules, t)
-	}
-
-	return schedules, err
-}
-
-func FormatShecule(list []time.Time) *map[int][]time.Time {
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].Before(list[j])
-	})
-
-	res := make(map[int][]time.Time)
-	for _, t := range list {
-		y := t.Year()
-		dateList := res[y]
-		if dateList == nil {
-			dateList = make([]time.Time, 0, 10)
-		}
-		res[y] = append(dateList, t)
-	}
-	return &res
-}
-
 func HandleReactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+	if m.UserID == s.State.User.ID {
+		return
+	}
 
+	msg, err := s.ChannelMessage(m.ChannelID, m.MessageID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	p := getPollFromMessage(msg)
+	if p == nil {
+		return
+	}
+
+	removeInvalidReactions(p, s, m.ChannelID, m.MessageID, m.Emoji.Name)
+	p.AddVote(getIndexFromEmoji(m.Emoji.Name))
+
+	syncVoterCount(p, s, m.ChannelID, m.MessageID)
+
+	embed := printer.PrintPoll(p)
+	_, err = s.ChannelMessageEditEmbed(m.ChannelID, m.MessageID, embed)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func HandleReactionRemove(s *discordgo.Session, m *discordgo.MessageReactionRemove) {
+	if m.UserID == s.State.User.ID {
+		return
+	}
+
+	msg, err := s.ChannelMessage(m.ChannelID, m.MessageID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	p := getPollFromMessage(msg)
+	if p == nil {
+		return
+	}
+
+	removeInvalidReactions(p, s, m.ChannelID, m.MessageID, m.Emoji.Name)
+	p.RemoveVote(getIndexFromEmoji(m.Emoji.Name))
+
+	syncVoterCount(p, s, m.ChannelID, m.MessageID)
+
+	embed := printer.PrintPoll(p)
+	_, err = s.ChannelMessageEditEmbed(m.ChannelID, m.MessageID, embed)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+}
+
+func getPollFromMessage(msg *discordgo.Message) *poll.Poll {
+	if len(msg.Embeds) != 1 {
+		return nil
+	}
+
+	p, err := getPollFromEmbed(msg.Embeds[0])
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	return p
+}
+
+func getPollFromEmbed(embed *discordgo.MessageEmbed) (*poll.Poll, error) {
+	var err error
+	if !strings.HasPrefix(embed.Description, "#") {
+		return nil, errors.New("invalid format")
+	}
+
+	id := strings.TrimPrefix(embed.Description, "#")
+	p := poll.GetPoll(id)
+
+	if p == nil {
+		if p, err = ParsePollEmbed(embed); err != nil {
+			return nil, err
+		}
+		poll.AddPoll(p)
+	}
+
+	return p, nil
+}
+
+func removeInvalidReactions(p *poll.Poll, s *discordgo.Session, channelID, messageID, emojiID string) {
+	if !isValidReaction(emojiID, p) {
+		err := s.MessageReactionsRemoveEmoji(channelID, messageID, emojiID)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+}
+
+func getIndexFromEmoji(id string) int {
+	return int([]rune(id)[0] - '\U0001F1E6')
+}
+
+func syncVoterCount(p *poll.Poll, s *discordgo.Session, channelID, messageID string) {
+	msg, err := s.ChannelMessage(channelID, messageID)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	p.ClearVotes()
+
+	for _, r := range msg.Reactions {
+		if !isValidReaction(r.Emoji.Name, p) {
+			continue
+		}
+
+		p.AddVotes(getABCIndex(r.Emoji.Name), r.Count-1)
+	}
+}
+
+func getABCIndex(emojiID string) int {
+	if emojiID == "" {
+		return -1
+	}
+	return int([]rune(emojiID)[0]) - int([]rune(emoji.ABCs[0])[0])
+}
+
+func isValidReaction(emojiID string, p *poll.Poll) bool {
+	n := getABCIndex(emojiID)
+	return n >= 0 && n < len(p.Columns)
 }
