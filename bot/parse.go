@@ -135,15 +135,18 @@ func parseEmbedDate(year int, text string) ([]time.Time, error) {
 			continue
 		}
 
+		// 絵文字の部分を取り除く
 		// 🇦 **08/01** ◼️◼️◼️ => [🇦, **08/01**, ◼️◼️◼️]
 		split := strings.Split(line, " ")
 		if len(split) != 3 {
 			return nil, errors.New("invalid date format #1")
 		}
 
+		// 装飾記号を取り除く
 		// **08/01** => 08/01
 		unformatted := strings.Trim(split[1], "*")
 
+		// カンマで分割して配列にする
 		// 08/01 => [08, 01]
 		split = strings.Split(unformatted, "/")
 		if len(split) != 2 {
