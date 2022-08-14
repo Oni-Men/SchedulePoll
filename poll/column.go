@@ -6,12 +6,17 @@ import (
 
 type Column struct {
 	When   time.Time
+	Long   time.Duration
 	voters int
 }
 
-func CreateColumn(when time.Time) *Column {
+func CreateColumn(when time.Time, long time.Duration) *Column {
+	if long < 0 {
+		long = 24 * time.Hour
+	}
 	col := Column{
 		When:   when,
+		Long:   long,
 		voters: 0,
 	}
 
