@@ -10,6 +10,8 @@ import (
 
 const EMBED_TITLE = ":calendar_spiral: 予定投票 :calendar_spiral:"
 
+var WeekDays = [...]string{"日", "月", "火", "水", "木", "金", "土"}
+
 func PrintPoll(p *poll.Poll) *discordgo.MessageEmbed {
 	var c int
 	b := NewEmbedBuilder()
@@ -18,14 +20,21 @@ func PrintPoll(p *poll.Poll) *discordgo.MessageEmbed {
 	b.FooterText("Discordの都合でグラフへの反映が遅れることがあります。")
 
 	mapping := columnsByYear(p)
-	allVotes := p.GetAllVotes()
+	allVotes := float64(p.GetAllVotes())
 
-	for year, list := range mapping {
-		var value string
-		for _, col := range list {
+	for year, columns := range mapping {
+		value := ""
+		for _, col := range columns {
 			emoji := emoji.ABCs[c]
-			progress := createProgress(float64(col.VoteCount())/float64(allVotes), 20)
-			value += emoji + " **" + col.When.Format("01/02") + "** " + progress + "\n\n"
+			ratio := float64(col.VoteCount()) / allVotes
+			progress := createProgress(ratio, 20)
+			weekDayText := WeekDays[col.When.Weekday()]
+			dateText := col.When.Format("01/02") + "(" + weekDayText + ")"
+			startAt := col.When.Format("15:04")
+			endAt := col.When.Add(col.Long).Format("15:04")
+
+			value += emoji + " **" + dateText + "** " + progress + "\n"
+			value += "    " + startAt + " - " + endAt + "\n"
 			c++
 		}
 

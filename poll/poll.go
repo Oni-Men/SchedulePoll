@@ -3,7 +3,6 @@ package poll
 import (
 	"errors"
 	"log"
-	"time"
 
 	"github.com/Oni-Men/SchedulePoll/util"
 )
@@ -27,7 +26,7 @@ func CreatePoll() *Poll {
 	return &p
 }
 
-func (p *Poll) AddColumnsAll(list []time.Time) error {
+func (p *Poll) AddColumnsAll(list []*Column) error {
 	for _, t := range list {
 		if _, err := p.AddColumn(t); err != nil {
 			return err
@@ -36,11 +35,10 @@ func (p *Poll) AddColumnsAll(list []time.Time) error {
 	return nil
 }
 
-func (p *Poll) AddColumn(when time.Time) (*Column, error) {
-	if len(p.Columns) >= 10 {
+func (p *Poll) AddColumn(col *Column) (*Column, error) {
+	if len(p.Columns) >= 26 {
 		return nil, errors.New("columns will exceed the max column count")
 	}
-	col := CreateColumn(when)
 	p.Columns = append(p.Columns, col)
 	return col, nil
 }

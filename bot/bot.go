@@ -52,8 +52,8 @@ func Start(s *discordgo.Session, gid string) int {
 }
 
 func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	parsed, err := ParseScheduleInput(m.Content)
-	if parsed == nil {
+	columns, err := ParseScheduleInput(m.Content)
+	if columns == nil {
 		return
 	}
 
@@ -67,7 +67,7 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	p := poll.CreatePoll()
-	p.AddColumnsAll(parsed)
+	p.AddColumnsAll(columns)
 	poll.AddPoll(p)
 
 	embed := printer.PrintPoll(p)
