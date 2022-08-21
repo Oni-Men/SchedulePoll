@@ -7,18 +7,15 @@ import (
 	"github.com/Oni-Men/SchedulePoll/bot"
 )
 
-var Token = flag.String("token", "", "Token of your bot")
-var GuildID = flag.String("guild", "", "Id of your guild")
-
 func goMain() int {
 	flag.Parse()
 
-	s := bot.Create(*Token)
+	s := bot.Create(os.Getenv("DISCORD_BOT_TOKEN"))
 	if s == nil {
 		return 1
 	}
 
-	return bot.Start(s, *GuildID)
+	return bot.Start(s)
 }
 
 func main() {

@@ -30,7 +30,7 @@ func Create(botToken string) *discordgo.Session {
 	return s
 }
 
-func Start(s *discordgo.Session, gid string) int {
+func Start(s *discordgo.Session) int {
 	s.AddHandler(HandleMessageCreate)
 	s.AddHandler(HandleReactionAdd)
 	s.AddHandler(HandleReactionRemove)
