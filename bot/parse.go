@@ -109,6 +109,9 @@ func parseDate(str string) (int, error) {
 }
 
 func parseStartAndEnd(str string) (time.Duration, time.Duration, error) {
+	if str == "" {
+		return 0, 0, nil
+	}
 	split := strings.Split(str, "-")
 	if len(split) != 2 {
 		return 0, 0, nil
