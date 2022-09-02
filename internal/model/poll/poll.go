@@ -3,19 +3,21 @@ package poll
 import (
 	"errors"
 	"log"
+	"time"
 
-	"github.com/Oni-Men/SchedulePoll/util"
+	"github.com/Oni-Men/SchedulePoll/pkg/rands"
 )
 
-type Voter string
-
 type Poll struct {
-	ID      string
-	Columns []*Column
+	ID          string
+	Title       string
+	Description string
+	Columns     []*Column
+	Due         time.Time
 }
 
 func CreatePoll() *Poll {
-	id, err := util.RandomHex(3)
+	id, err := rands.RandomHex(3)
 	if err != nil {
 		log.Fatalf("failed to create a new poll: %v\n", err)
 	}

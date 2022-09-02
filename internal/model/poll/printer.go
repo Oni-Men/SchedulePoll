@@ -1,10 +1,11 @@
-package printer
+package poll
 
 import (
 	"strconv"
 
-	"github.com/Oni-Men/SchedulePoll/emoji"
-	"github.com/Oni-Men/SchedulePoll/poll"
+	"github.com/Oni-Men/SchedulePoll/pkg/emoji"
+	"github.com/Oni-Men/SchedulePoll/pkg/printer"
+	"github.com/Oni-Men/SchedulePoll/pkg/timeutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -12,9 +13,9 @@ const EMBED_TITLE = ":calendar_spiral: 予定投票 :calendar_spiral:"
 
 var WeekDays = [...]string{"日", "月", "火", "水", "木", "金", "土"}
 
-func PrintPoll(p *poll.Poll) *discordgo.MessageEmbed {
+func PrintPoll(p *Poll) *discordgo.MessageEmbed {
 	var c int
-	b := NewEmbedBuilder()
+	b := printer.New()
 	b.Title(EMBED_TITLE)
 	b.Description("#" + p.ID)
 	b.FooterText("Discordの都合でグラフへの反映が遅れることがあります。")
@@ -25,24 +26,20 @@ func PrintPoll(p *poll.Poll) *discordgo.MessageEmbed {
 	for year, columns := range mapping {
 		value := ""
 		for _, col := range columns {
-			emoji := emoji.ABCs[c]
+			emoji := emoji.ABCDEmoji(c)
 			ratio := float64(col.VoteCount()) / allVotes
 			progress := createProgress(ratio, 20)
-			weekDayText := WeekDays[col.When.Weekday()]
-			dateText := col.When.Format("01/02") + "(" + weekDayText + ")"
-			startAt := col.When.Format("15:04")
-			endAt := col.When.Add(col.Long).Format("15:04")
+			weekDayText := WeekDays[col.Date.Weekday()]
+			dateText := col.Date.Format("01/02") + "(" + weekDayText + ")"
+			beginAt := timeutil.GetZeroTime().Add(col.BeginAt).Format("15:04")
+			endAt := timeutil.GetZeroTime().Add(col.EndAt).Format("15:04")
 
 			value += emoji + " **" + dateText + "** " + progress + "\n"
-			value += "    " + startAt + " - " + endAt + "\n"
+			value += "    " + beginAt + " - " + endAt + "\n"
 			c++
 		}
 
-		b.AddField(&discordgo.MessageEmbedField{
-			Name:   strconv.Itoa(year) + "年",
-			Value:  value,
-			Inline: false,
-		})
+		b.AddField(strconv.Itoa(year)+"年", value)
 	}
 
 	return b.Build()
@@ -61,15 +58,15 @@ func createProgress(ratio float64, length int) string {
 	return text
 }
 
-func columnsByYear(p *poll.Poll) map[int][]*poll.Column {
-	mapping := make(map[int][]*poll.Column)
+func columnsByYear(p *Poll) map[int][]*Column {
+	mapping := make(map[int][]*Column)
 
 	for _, col := range p.Columns {
-		list := mapping[col.When.Year()]
+		list := mapping[col.Date.Year()]
 		if list == nil {
-			list = make([]*poll.Column, 0, 5)
+			list = make([]*Column, 0, 5)
 		}
-		mapping[col.When.Year()] = append(list, col)
+		mapping[col.Date.Year()] = append(list, col)
 	}
 
 	return mapping
