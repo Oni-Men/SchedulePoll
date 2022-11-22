@@ -39,7 +39,7 @@ func (e *EmbedPrinter) FooterIcon(url string) *EmbedPrinter {
 
 func (e *EmbedPrinter) AddField(name, value string, inline ...bool) *EmbedPrinter {
 	if value == "" {
-		value = "*"
+		value = "---"
 	}
 	field := &discordgo.MessageEmbedField{
 		Name:   name,

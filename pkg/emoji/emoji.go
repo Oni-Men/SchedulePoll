@@ -3,6 +3,7 @@ package emoji
 const (
 	ProgressFG = "◻️"
 	ProgressBG = "◼️"
+	Calendar   = "🗓️"
 )
 
 var ABCs = [26]rune{}
