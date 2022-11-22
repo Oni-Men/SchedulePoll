@@ -34,8 +34,17 @@ type ParsedDateResult struct {
 
 func NewDateParser(input string) *DateParser {
 	var curr = time.Now()
+
+	list := strings.Split(input, "\n")
+	list = sliceutil.Map(list, func(t string) string {
+		return strings.TrimSpace(t)
+	})
+	list = sliceutil.Filter(list, func(t string) bool {
+		return t != ""
+	})
+
 	return &DateParser{
-		strings.Split(input, "\n"),
+		list,
 		curr.Year(),
 		curr.Month(),
 		curr.Day(),
@@ -43,11 +52,19 @@ func NewDateParser(input string) *DateParser {
 	}
 }
 
+func ParseInlineDate(input string) (*ParsedDateResult, error) {
+	dp := NewDateParser(input)
+	if dp.HasNext() {
+		return dp.Next()
+	}
+	return nil, errors.New("invalid input value")
+}
+
 func newParsedDateResult(p *DateParser) *ParsedDateResult {
 	return &ParsedDateResult{
 		Date:    time.Date(p.currYear, p.currMonth, p.currDay, 0, 0, 0, 0, time.Local),
 		BeginAt: 0,
-		EndAt:   0,
+		EndAt:   24 * time.Hour,
 	}
 }
 
@@ -71,17 +88,17 @@ func (p *DateParser) Next() (*ParsedDateResult, error) {
 
 	res := newParsedDateResult(p)
 
-	var pop string
+	var pop *string
 	if len(split) == 3 {
-		pop, split = sliceutil.Pop(split) // Pop "year" element
-		if err := processYear(res, pop); err != nil {
+		pop, split, _ = sliceutil.Pop(split) // Pop "year" element
+		if err := processYear(res, *pop); err != nil {
 			return nil, err
 		}
 	}
 
 	if len(split) == 2 {
-		pop, split = sliceutil.Pop(split) // Pop "month" element
-		if err := processMonth(res, pop); err != nil {
+		pop, split, _ = sliceutil.Pop(split) // Pop "month" element
+		if err := processMonth(res, *pop); err != nil {
 			return nil, err
 		}
 	}
@@ -146,23 +163,27 @@ func processDate(res *ParsedDateResult, str string) error {
 
 func processDuration(res *ParsedDateResult, str string) error {
 	if str == "" {
-		return errors.New("invalid duration format")
+		return nil
 	}
+
+	var unpush *string
 	split := strings.Split(str, "-")
-	if len(split) != 2 {
-		return errors.New("invalid duration format")
+	if len(split) == 2 {
+		unpush, split, _ = sliceutil.Unpush(split)
+		if end, err := time.Parse(DurationFormat, *unpush); err != nil {
+			return err
+		} else {
+			res.EndAt = timeutil.GetElapsedFromZero(end)
+		}
 	}
 
-	if begin, err := time.Parse(DurationFormat, split[0]); err != nil {
-		return err
-	} else {
-		res.BeginAt = timeutil.GetElapsedFromZero(begin)
-	}
-
-	if end, err := time.Parse(DurationFormat, split[1]); err != nil {
-		return err
-	} else {
-		res.EndAt = timeutil.GetElapsedFromZero(end)
+	if len(split) == 1 {
+		unpush, _, _ = sliceutil.Unpush(split)
+		if begin, err := time.Parse(DurationFormat, *unpush); err != nil {
+			return err
+		} else {
+			res.BeginAt = timeutil.GetElapsedFromZero(begin)
+		}
 	}
 
 	return nil

@@ -23,17 +23,17 @@ func TestParseDate(t *testing.T) {
 				{
 					Date:    time.Date(currYear, 5, 1, 0, 0, 0, 0, time.Local),
 					BeginAt: 0,
-					EndAt:   0,
+					EndAt:   24 * time.Hour,
 				},
 				{
 					Date:    time.Date(currYear, 5, 2, 0, 0, 0, 0, time.Local),
 					BeginAt: 0,
-					EndAt:   0,
+					EndAt:   24 * time.Hour,
 				},
 				{
 					Date:    time.Date(currYear, 5, 3, 0, 0, 0, 0, time.Local),
 					BeginAt: 0,
-					EndAt:   0,
+					EndAt:   24 * time.Hour,
 				},
 			},
 		},
@@ -64,6 +64,16 @@ func TestParseDate(t *testing.T) {
 					Date:    time.Date(currYear, 1, 5, 0, 0, 0, 0, time.Local),
 					BeginAt: 14 * time.Hour,
 					EndAt:   15 * time.Hour,
+				},
+			},
+		},
+		{
+			`4/1 15:00`,
+			[]ParsedDateResult{
+				{
+					Date:    time.Date(currYear, 4, 1, 0, 0, 0, 0, time.Local),
+					BeginAt: 15 * time.Hour,
+					EndAt:   24 * time.Hour,
 				},
 			},
 		},
