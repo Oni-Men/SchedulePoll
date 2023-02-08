@@ -2,7 +2,7 @@ module github.com/Oni-Men/SchedulePoll
 
 go 1.19
 
-require github.com/bwmarrin/discordgo v0.26.1
+require github.com/bwmarrin/discordgo v0.27.0
 
 require (
 	github.com/go-playground/locales v0.14.0 // indirect
