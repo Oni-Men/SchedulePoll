@@ -7,31 +7,31 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type YoteiCommand struct{}
+type MeetmeCommand struct{}
 
-var _ ISlashCommand = (*YoteiCommand)(nil)
+var _ ISlashCommand = (*MeetmeCommand)(nil)
 
-func (cmd *YoteiCommand) ID() string {
-	return "bot.command.yotei"
+func (cmd *MeetmeCommand) ID() string {
+	return "bot.command.meetme"
 }
 
-func (cmd *YoteiCommand) Name() string {
-	return "yotei"
+func (cmd *MeetmeCommand) Name() string {
+	return "meetme"
 }
 
-func (cmd *YoteiCommand) Version() string {
+func (cmd *MeetmeCommand) Version() string {
 	return "1.0.0"
 }
 
-func (cmd *YoteiCommand) Description() string {
-	return "Create a new Yotei Poll"
+func (cmd *MeetmeCommand) Description() string {
+	return "Create a new Poll to find a good time to meet"
 }
 
-func (cmd *YoteiCommand) Options() []*discordgo.ApplicationCommandOption {
+func (cmd *MeetmeCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{}
 }
 
-func (cmd *YoteiCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (cmd *MeetmeCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{
@@ -72,7 +72,7 @@ func (cmd *YoteiCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCr
 							CustomID:    "poll-due",
 							Label:       "投票の期限",
 							Style:       discordgo.TextInputShort,
-							Placeholder: time.Now().Format("2006/1/2 15:04"),
+							Placeholder: time.Now().AddDate(0, 0, 7).Format("2006/1/2 15:04"),
 							Required:    false,
 							MaxLength:   16,
 						},

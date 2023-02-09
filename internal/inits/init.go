@@ -7,7 +7,7 @@ import (
 )
 
 func Inititalize(b *bot.Bot) {
-	b.AddSlashCommand(new(slashcmd.YoteiCommand))
+	b.AddSlashCommand(new(slashcmd.MeetmeCommand))
 
 	ps := service.NewPollService(b)
 	ps.Init()
