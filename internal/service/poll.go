@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -72,7 +71,7 @@ func (ps *PollService) handleModalSubmit(s *discordgo.Session, i *discordgo.Inte
 				Description: "不明なモーダルです",
 				Color:       ERR_COLOR,
 			}},
-		}, discordgo.WithContext(context.TODO()))
+		})
 		return
 	}
 
