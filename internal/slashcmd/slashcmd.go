@@ -3,7 +3,7 @@ package slashcmd
 import "github.com/bwmarrin/discordgo"
 
 const (
-	PollCreateModal = "yotei.poll-create-modal"
+	PollCreateModal = "meetme.poll-create-modal"
 )
 
 type ISlashCommand interface {

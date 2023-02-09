@@ -36,41 +36,36 @@ func (cmd *MeetmeCommand) Handle(s *discordgo.Session, i *discordgo.InteractionC
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{
 			CustomID: PollCreateModal,
-			Title:    "日程投票の作成",
+			Title:    "MeetMe Form",
 			Components: []discordgo.MessageComponent{
-				// 投票のタイトル
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
-							CustomID:    "poll-title",
-							Label:       "この投票のタイトル",
-							Style:       discordgo.TextInputShort,
-							Placeholder: "カラオケ行ける日募集～",
-							Required:    true,
-							MaxLength:   50,
+							CustomID:  "poll-title",
+							Label:     "Summary",
+							Style:     discordgo.TextInputShort,
+							Required:  true,
+							MaxLength: 50,
 						},
 					},
 				},
-				// 投票の説明
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
-							CustomID:    "poll-description",
-							Label:       "日程の目的など、投票者に伝えたいことを入力してください。",
-							Style:       discordgo.TextInputParagraph,
-							Placeholder: "集合場所は駅前でーす",
-							Required:    false,
-							MaxLength:   500,
-							MinLength:   0,
+							CustomID:  "poll-description",
+							Label:     "Description",
+							Style:     discordgo.TextInputParagraph,
+							Required:  false,
+							MaxLength: 500,
+							MinLength: 0,
 						},
 					},
 				},
-				// 投票の期限
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "poll-due",
-							Label:       "投票の期限",
+							Label:       "Due",
 							Style:       discordgo.TextInputShort,
 							Placeholder: time.Now().AddDate(0, 0, 7).Format("2006/1/2 15:04"),
 							Required:    false,
@@ -78,12 +73,11 @@ func (cmd *MeetmeCommand) Handle(s *discordgo.Session, i *discordgo.InteractionC
 						},
 					},
 				},
-				// 候補の日程リスト
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:  "poll-date-list",
-							Label:     "日程リスト",
+							Label:     "Candidates",
 							Style:     discordgo.TextInputParagraph,
 							Required:  true,
 							MaxLength: 500,
