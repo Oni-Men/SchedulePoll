@@ -2,13 +2,18 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/Oni-Men/SchedulePoll/internal/bot"
 	"github.com/Oni-Men/SchedulePoll/internal/inits"
 )
 
 func goMain() int {
-	b := bot.Create(os.Getenv("DISCORD_BOT_TOKEN"))
+	token := os.Getenv("DISCORD_BOT_TOKEN")
+	cleanupOption := os.Getenv("CLEANUP_CMDS")
+	cleanup := strings.ToUpper(cleanupOption) == "TRUE"
+
+	b := bot.Create(token, cleanup)
 	if b == nil {
 		return 1
 	}

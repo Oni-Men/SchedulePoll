@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -12,7 +14,14 @@ import (
 	"github.com/Oni-Men/SchedulePoll/internal/slashcmd"
 	"github.com/Oni-Men/SchedulePoll/pkg/dateparser"
 	"github.com/Oni-Men/SchedulePoll/pkg/emoji"
+	"github.com/Oni-Men/SchedulePoll/pkg/timeutil"
 	"github.com/bwmarrin/discordgo"
+	"github.com/go-playground/validator/v10"
+)
+
+const (
+	INFO_COLOR = 0x66ccff
+	ERR_COLOR  = 0xff6666
 )
 
 type PollService struct {
@@ -28,10 +37,10 @@ func NewPollService(b *bot.Bot) *PollService {
 
 func (ps *PollService) Init() {
 	ps.pollManager = poll.CreatePollManager()
-	ps.Bind()
+	ps.BindHandlers()
 }
 
-func (p *PollService) Bind() {
+func (p *PollService) BindHandlers() {
 	p.bot.AddHandler(p.handleInteractionCreate)
 	p.bot.AddHandler(p.handleReactionAdd)
 	p.bot.AddHandler(p.handleReactionRemove)
@@ -40,63 +49,99 @@ func (p *PollService) Bind() {
 func (ps *PollService) handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
 	case discordgo.InteractionModalSubmit:
-		ps.handleModalSubmit(s, i)
-	case discordgo.InteractionMessageComponent:
-		ps.handlePollItems(s, i)
+		go ps.handleModalSubmit(s, i)
 	}
 }
 
 func (ps *PollService) handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	data := i.ModalSubmitData()
-	if data.CustomID != slashcmd.PollCreateModal {
-		return
-	}
-
-	res := getModalResponse(&data)
-	p, err := createPollFromModalResponse(res)
-	if err != nil {
-		ps.bot.RespondText(i.Interaction, err.Error())
-		fmt.Println(err)
-		return
-	} else if p == nil {
-		ps.bot.RespondText(i.Interaction, "cannot create a new poll")
-		return
-	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponsePong,
-		})
-	}
-
-	ps.pollManager.AddPoll(p)
-
-	embed := poll.PrintPoll(p)
-	msg, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
-		Embed: embed,
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "アンケートを作成中...",
+		},
 	})
 	if err != nil {
-		fmt.Println(err)
+		log.Println("error responding to modal submi: " + err.Error())
 	}
 
-	//Add reactions to vote
+	if data.CustomID != slashcmd.PollCreateModal {
+		s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{{
+				Title:       "エラー",
+				Description: "不明なモーダルです",
+				Color:       ERR_COLOR,
+			}},
+		}, discordgo.WithContext(context.TODO()))
+		return
+	}
+
+	res, err := toModalResponse(&data)
+	if err != nil {
+		s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{{
+				Title:       "エラー",
+				Description: err.Error(),
+				Color:       ERR_COLOR,
+			}},
+		})
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(res); err != nil {
+		s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{{
+				Title:       "エラー",
+				Description: err.Error(),
+				Color:       ERR_COLOR,
+			}},
+		})
+		return
+	}
+
+	if err != nil {
+		s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{{
+				Title:       "エラー",
+				Description: err.Error(),
+				Color:       ERR_COLOR,
+			}},
+		})
+		return
+	}
+
+	p := newPollFromModalResponse(res)
+	ps.pollManager.AddPoll(p)
+	embed := PrintPoll(p)
+
+	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: fmt.Sprintf("@here, <@%s> がスケジュール調整アンケートを作成しました", i.Interaction.Member.User.ID),
+		Embeds:  []*discordgo.MessageEmbed{embed},
+	})
+	if err != nil {
+		go s.ChannelMessageSendEmbed(i.ChannelID, &discordgo.MessageEmbed{
+			Title:       "エラー",
+			Description: err.Error(),
+			Color:       ERR_COLOR,
+		})
+		return
+	}
+
+	// Add reactions to each vote. Reactions are regional indicators.
+	// Reactions count is the same as columns count in the poll.
+	// An order of the reactions should be assured. therfore, adding reactions are not going to use goroutine.
 	for k := 0; k < len(p.Columns); k++ {
 		emoji := emoji.ABCDEmoji(k)
-		err = s.MessageReactionAdd(i.ChannelID, msg.ID, emoji)
+		err := s.MessageReactionAdd(i.ChannelID, msg.ID, emoji)
 		if err != nil {
-			fmt.Println(err)
+			go s.ChannelMessageSendEmbed(i.ChannelID, &discordgo.MessageEmbed{
+				Title:       "エラー",
+				Description: err.Error(),
+				Color:       ERR_COLOR,
+			})
 		}
 	}
-
-}
-
-func (ps *PollService) handlePollItems(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.MessageComponentData().CustomID != "poll-item" {
-		return
-	}
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{},
-	})
 }
 
 func (ps *PollService) handleReactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
@@ -120,7 +165,7 @@ func (ps *PollService) handleReactionAdd(s *discordgo.Session, m *discordgo.Mess
 
 	syncVoterCount(p, s, m.ChannelID, m.MessageID)
 
-	embed := poll.PrintPoll(p)
+	embed := PrintPoll(p)
 	_, err = s.ChannelMessageEditEmbed(m.ChannelID, m.MessageID, embed)
 	if err != nil {
 		fmt.Println(err)
@@ -148,17 +193,18 @@ func (ps *PollService) handleReactionRemove(s *discordgo.Session, m *discordgo.M
 
 	syncVoterCount(p, s, m.ChannelID, m.MessageID)
 
-	embed := poll.PrintPoll(p)
+	embed := PrintPoll(p)
 	_, err = s.ChannelMessageEditEmbed(m.ChannelID, m.MessageID, embed)
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func getModalResponse(data *discordgo.ModalSubmitInteractionData) *modal.ModalResponse {
+// This function converts response data which is discordgo component to our ModalResponse.
+// ModalResponse will directly be used for creating a new poll.
+func toModalResponse(data *discordgo.ModalSubmitInteractionData) (*modal.ModalResponse, error) {
 	options := make([]modal.ModalResponseOption, 0, 10)
 
-	// モーダルの結果から投票作成に必要な情報を抜き出す
 	for _, c := range data.Components {
 		row, ok := c.(*discordgo.ActionsRow)
 		if !ok {
@@ -181,39 +227,62 @@ func getModalResponse(data *discordgo.ModalSubmitInteractionData) *modal.ModalRe
 		case "poll-description":
 			options = append(options, modal.WithDesc(val))
 		case "poll-due":
-			t, err := time.Parse("2006/01/02 15:04", val)
-			if err != nil {
-				break
+			if val == "" {
+				options = append(options, modal.WithDue(timeutil.GetZeroTime()))
+			} else if due, err := parseDue(val); due != nil {
+				options = append(options, modal.WithDue(*due))
+			} else if err != nil {
+				return nil, err
 			}
-			options = append(options, modal.WithDue(t))
 		case "poll-date-list":
-			options = append(options, modal.WithDateList(val))
+			if dateList, err := toDateList(val); err == nil {
+				options = append(options, modal.WithDateList(dateList))
+			} else {
+				return nil, err
+			}
 		}
 	}
 
-	return modal.NewModalResponse(options...)
+	return modal.NewModalResponse(options...), nil
 }
 
-func createPollFromModalResponse(res *modal.ModalResponse) (*poll.Poll, error) {
-	p := poll.CreatePoll()
-	p.Title = res.Title()
-	p.Description = res.Description()
-	p.Due = res.ExpireAt()
-
-	dp := dateparser.NewDateParser(res.DateList())
+// Parse date list string with DateParser.
+func toDateList(input string) ([]dateparser.ParsedDateResult, error) {
+	list := make([]dateparser.ParsedDateResult, 0, 10)
+	dp := dateparser.NewDateParser(input)
 	for dp.HasNext() {
-		if next, err := dp.Next(); err == nil && next != nil {
-			p.AddColumn(poll.CreateColumn(
-				next.Date,
-				next.BeginAt,
-				next.EndAt,
-			))
+		if next, err := dp.Next(); err == nil {
+			list = append(list, *next)
 		} else {
 			return nil, err
 		}
 	}
+	return list, nil
+}
 
-	return p, nil
+func parseDue(input string) (*time.Time, error) {
+	res, err := dateparser.ParseInlineDate(input)
+	if err == nil {
+		due := res.Date.Add(res.BeginAt)
+		return &due, nil
+	}
+	return nil, err
+}
+
+func newPollFromModalResponse(res *modal.ModalResponse) *poll.Poll {
+	p := poll.CreatePoll()
+	p.Title = res.Title()
+	p.Description = res.Description()
+	p.Due = res.Due()
+
+	for _, date := range res.DateList() {
+		p.AddColumn(poll.CreateColumn(
+			date.Date,
+			date.BeginAt,
+			date.EndAt,
+		))
+	}
+	return p
 }
 
 func (ps *PollService) getPollFromMessage(msg *discordgo.Message) *poll.Poll {
@@ -240,7 +309,7 @@ func (ps *PollService) getPollFromEmbed(embed *discordgo.MessageEmbed) (*poll.Po
 	p := ps.pollManager.GetPoll(id)
 
 	if p == nil {
-		if p, err = poll.ParsePollEmbed(embed); err != nil {
+		if p, err = ParsePollEmbed(embed); err != nil {
 			return nil, err
 		}
 		ps.pollManager.AddPoll(p)

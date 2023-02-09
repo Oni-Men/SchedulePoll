@@ -3,15 +3,16 @@ package modal
 import (
 	"time"
 
+	"github.com/Oni-Men/SchedulePoll/pkg/dateparser"
 	"github.com/Oni-Men/SchedulePoll/pkg/timeutil"
 )
 
 // A struct which represents modal submitted data.
 type ModalResponse struct {
-	title       string
-	description string
+	title       string `validate:"max=50"`
+	description string `validate:"max=500"`
 	due         time.Time
-	dateList    string
+	dateList    []dateparser.ParsedDateResult
 }
 
 type ModalResponseOption func(*ModalResponse)
@@ -34,7 +35,7 @@ func WithDue(due time.Time) ModalResponseOption {
 	}
 }
 
-func WithDateList(dateList string) ModalResponseOption {
+func WithDateList(dateList []dateparser.ParsedDateResult) ModalResponseOption {
 	return func(r *ModalResponse) {
 		r.dateList = dateList
 	}
@@ -45,7 +46,7 @@ func NewModalResponse(options ...ModalResponseOption) *ModalResponse {
 		title:       "No title",
 		description: "",
 		due:         timeutil.GetZeroTime(),
-		dateList:    "",
+		dateList:    []dateparser.ParsedDateResult{},
 	}
 
 	// Applying options
@@ -64,10 +65,10 @@ func (r *ModalResponse) Description() string {
 	return r.description
 }
 
-func (r *ModalResponse) ExpireAt() time.Time {
+func (r *ModalResponse) Due() time.Time {
 	return r.due
 }
 
-func (r *ModalResponse) DateList() string {
+func (r *ModalResponse) DateList() []dateparser.ParsedDateResult {
 	return r.dateList
 }

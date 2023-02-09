@@ -1,4 +1,4 @@
-package poll
+package service
 
 import (
 	"errors"
@@ -8,24 +8,58 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Oni-Men/SchedulePoll/internal/model/poll"
+	"github.com/Oni-Men/SchedulePoll/pkg/dateparser"
+	"github.com/Oni-Men/SchedulePoll/pkg/sliceutil"
 	"github.com/Oni-Men/SchedulePoll/pkg/timeutil"
 	"github.com/bwmarrin/discordgo"
 )
 
-func ParsePollEmbed(embed *discordgo.MessageEmbed) (*Poll, error) {
+func ParsePollEmbed(embed *discordgo.MessageEmbed) (*poll.Poll, error) {
 	if embed.Title != EMBED_TITLE {
-		return nil, nil
+		return nil, errors.New("parsing embed is not a poll")
 	}
 
-	if !strings.HasPrefix(embed.Description, "#") {
-		return nil, nil
+	split := strings.SplitN(embed.Description, "\n", 1)
+
+	if !isPollID(split[0]) {
+		return nil, errors.New("parsing embed is not a poll")
 	}
 
-	id := strings.TrimPrefix(embed.Description, "#")
-	p := CreatePoll()
+	id := getPollID(split[0])
+	p := poll.CreatePoll()
 	p.ID = id
+	if len(split) == 2 {
+		p.Description = split[1]
+	}
 
-	for _, field := range embed.Fields {
+	f, fields, err := sliceutil.Pop(embed.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	p.Title = (*f).Name
+	p.Description = (*f).Value
+
+	f, fields, err = sliceutil.Pop(fields)
+	if err != nil {
+		return nil, err
+	}
+
+	if (*f).Name == "投票期限" {
+		if (*f).Value == "なし" {
+			p.Due = timeutil.GetZeroTime()
+		} else {
+			res, err := dateparser.ParseInlineDate((*f).Value)
+			if err == nil {
+				p.Due = res.Date.Add(res.BeginAt)
+			} else {
+				return nil, err
+			}
+		}
+	}
+
+	for _, field := range fields {
 		year, err := parseEmbedYear(field.Name)
 		if err != nil {
 			return nil, err
@@ -47,6 +81,16 @@ func ParsePollEmbed(embed *discordgo.MessageEmbed) (*Poll, error) {
 	return p, nil
 }
 
+func isPollID(s string) bool {
+	return strings.HasPrefix(s, "#")
+}
+
+func getPollID(s string) string {
+	s = strings.TrimPrefix(s, "#")
+	s = strings.TrimSuffix(s, "\n")
+	return s
+}
+
 func parseEmbedYear(text string) (int, error) {
 	if !strings.HasSuffix(text, "年") {
 		return -1, errors.New("invalid year format")
@@ -56,10 +100,11 @@ func parseEmbedYear(text string) (int, error) {
 	return strconv.Atoi(text)
 }
 
-func parseEmbed(year int, text string) ([]*Column, error) {
+func parseEmbed(year int, text string) ([]*poll.Column, error) {
 	lines := strings.Split(text, "\n")
-	columns := make([]*Column, 0, len(lines)/2)
+	columns := make([]*poll.Column, 0, len(lines)/2)
 
+	c := 0
 	for i := 0; i+1 < len(lines); i += 2 {
 		date, err := parseUpperLine(lines[i], year)
 		if err != nil {
@@ -71,7 +116,8 @@ func parseEmbed(year int, text string) ([]*Column, error) {
 			return nil, err
 		}
 
-		columns = append(columns, CreateColumn(*date, beginAt, endAt))
+		columns = append(columns, poll.CreateColumn(*date, beginAt, endAt))
+		c++
 	}
 
 	return columns, nil
@@ -116,8 +162,11 @@ func parseUpperLine(line string, year int) (*time.Time, error) {
 func parseLowerLine(line string) (time.Duration, time.Duration, error) {
 	// 空白を取り除く
 	line = strings.Trim(line, " ")
-	split := strings.Split(line, "-")
-	if len(split) != 2 {
+	split := strings.Split(line, " ")
+	split = sliceutil.Filter(split, func(t string) bool {
+		return t != ""
+	})
+	if len(split) != 4 {
 		return 0, 0, errors.New("invalid format: parseLowerLine#1")
 	}
 
@@ -125,7 +174,7 @@ func parseLowerLine(line string) (time.Duration, time.Duration, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	endAt, err := time.Parse("15:04", strings.Trim(split[1], " "))
+	endAt, err := time.Parse("15:04", strings.Trim(split[2], " "))
 	if err != nil {
 		return 0, 0, err
 	}

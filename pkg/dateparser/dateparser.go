@@ -2,6 +2,7 @@ package dateparser
 
 import (
 	"errors"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ const (
 	YoteiDateFormat = "2006/01/02"
 	DurationFormat  = "15:04"
 )
+
+var DateSplitRegexp *regexp.Regexp
 
 // DateParser parses date list.
 // Each date in the list is splited by new line
@@ -35,7 +38,17 @@ type ParsedDateResult struct {
 func NewDateParser(input string) *DateParser {
 	var curr = time.Now()
 
-	list := strings.Split(input, "\n")
+	// 日付を改行またはコンマで分割する正規表現
+	// キャッシュすることで使いまわす
+	if DateSplitRegexp == nil {
+		var err error
+		DateSplitRegexp, err = regexp.Compile("[\n,]")
+		if err != nil {
+			return nil
+		}
+	}
+
+	list := DateSplitRegexp.Split(input, -1)
 	list = sliceutil.Map(list, func(t string) string {
 		return strings.TrimSpace(t)
 	})
@@ -91,21 +104,36 @@ func (p *DateParser) Next() (*ParsedDateResult, error) {
 	var pop *string
 	if len(split) == 3 {
 		pop, split, _ = sliceutil.Pop(split) // Pop "year" element
-		if err := processYear(res, *pop); err != nil {
+		if year, err := processYear(*pop); err == nil {
+			if year < 0 {
+				return nil, errors.New("year must be greater than zero")
+			}
+			res.Date = timeutil.SetYear(res.Date, year)
+			p.currYear = year
+		} else {
 			return nil, err
 		}
 	}
 
 	if len(split) == 2 {
 		pop, split, _ = sliceutil.Pop(split) // Pop "month" element
-		if err := processMonth(res, *pop); err != nil {
+		if month, err := processMonth(*pop); err == nil {
+			if month < 1 || month > 12 {
+				return nil, errors.New("month must be specified within 1 to 12")
+			}
+			res.Date = timeutil.SetMonth(res.Date, month)
+			p.currMonth = time.Month(month)
+		} else {
 			return nil, err
 		}
 	}
 
 	if len(split) == 1 {
 		dateStr, durStr := getDateAndDuration(split[0])
-		if err := processDate(res, dateStr); err != nil {
+		if date, err := processDate(dateStr); err == nil {
+			res.Date = timeutil.SetDay(res.Date, date)
+			p.currDay = date
+		} else {
 			return nil, err
 		}
 
@@ -117,28 +145,20 @@ func (p *DateParser) Next() (*ParsedDateResult, error) {
 	return res, nil
 }
 
-func processYear(res *ParsedDateResult, str string) error {
+func processYear(str string) (int, error) {
 	year, err := strconv.Atoi(str)
 	if err != nil {
-		return err
+		return -1, err
 	}
-	if year < 0 {
-		return errors.New("year must be greater than zero")
-	}
-	res.Date = timeutil.SetYear(res.Date, year)
-	return nil
+	return year, nil
 }
 
-func processMonth(res *ParsedDateResult, str string) error {
+func processMonth(str string) (int, error) {
 	month, err := strconv.Atoi(str)
 	if err != nil {
-		return err
+		return -1, err
 	}
-	if month < 1 || month > 12 {
-		return errors.New("month must be specified within 1 to 12")
-	}
-	res.Date = timeutil.SetMonth(res.Date, month)
-	return nil
+	return month, nil
 }
 
 func getDateAndDuration(str string) (string, string) {
@@ -152,13 +172,12 @@ func getDateAndDuration(str string) (string, string) {
 	return split[0], split[1]
 }
 
-func processDate(res *ParsedDateResult, str string) error {
+func processDate(str string) (int, error) {
 	day, err := strconv.Atoi(str)
 	if err != nil {
-		return err
+		return -1, err
 	}
-	res.Date = timeutil.SetDay(res.Date, day)
-	return nil
+	return day, nil
 }
 
 func processDuration(res *ParsedDateResult, str string) error {

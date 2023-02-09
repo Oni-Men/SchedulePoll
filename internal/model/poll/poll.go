@@ -16,27 +16,34 @@ type Poll struct {
 	Due         time.Time
 }
 
+// 投票を作成します. 失敗したらnilを返します.
 func CreatePoll() *Poll {
 	id, err := rands.RandomHex(3)
 	if err != nil {
-		log.Fatalf("failed to create a new poll: %v\n", err)
+		log.Printf("failed to create a new poll: %v\n", err)
+		return nil
 	}
 	p := Poll{
-		ID:      id,
-		Columns: make([]*Column, 0, 10),
+		ID:          id,
+		Columns:     make([]*Column, 0, 10),
+		Description: "No description",
 	}
 	return &p
 }
 
+// カラムのリストを追加します. 失敗したらその時点で追加を止め、エラーを返します.
 func (p *Poll) AddColumnsAll(list []*Column) error {
 	for _, t := range list {
-		if _, err := p.AddColumn(t); err != nil {
+		_, err := p.AddColumn(t)
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// カラムを追加します. 失敗するとエラーを返します.
+// カラム数が26を超えるとき, 追加に失敗します.
 func (p *Poll) AddColumn(col *Column) (*Column, error) {
 	if len(p.Columns) >= 26 {
 		return nil, errors.New("columns will exceed the max column count")
