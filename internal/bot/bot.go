@@ -14,6 +14,7 @@ import (
 type Bot struct {
 	session  *discordgo.Session
 	commands []slashcmd.ISlashCommand
+	cleanup  bool
 }
 
 // 与えられたトークンからBotを生成し、返します
@@ -26,6 +27,7 @@ func Create(token string, cleanupCommands bool) *Bot {
 	return &Bot{
 		session:  s,
 		commands: []slashcmd.ISlashCommand{},
+		cleanup:  cleanupCommands,
 	}
 }
 
@@ -48,14 +50,14 @@ func (b *Bot) Start() int {
 
 	guildID := os.Getenv("GUILD_ID")
 
-	commandIds := make(map[string]string, len(b.commands))
-	for _, cmd := range b.commands {
-		err := b.addApplicationCommand(guildID, &cmd)
+	registerdCommands := make([]*discordgo.ApplicationCommand, len(b.commands))
+	for i, cmd := range b.commands {
+		appCmd, err := b.addApplicationCommand(guildID, &cmd)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		commandIds[cmd.ID()] = cmd.Name()
+		registerdCommands[i] = appCmd
 	}
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
@@ -63,10 +65,10 @@ func (b *Bot) Start() int {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
 
-	for id, name := range commandIds {
-		err := b.session.ApplicationCommandDelete(b.session.State.Application.ID, guildID, id)
+	for _, cmd := range registerdCommands {
+		err := b.session.ApplicationCommandDelete(b.session.State.Application.ID, guildID, cmd.ID)
 		if err != nil {
-			log.Fatalf("Cannot delete slash command %q: %v", name, err)
+			log.Fatalf("Cannot delete slash command %q: %v", cmd.Name, err)
 		}
 	}
 
@@ -77,19 +79,19 @@ func (b *Bot) AddHandler(handler any) {
 	b.session.AddHandler(handler)
 }
 
-func (b *Bot) addApplicationCommand(guildID string, cmd *slashcmd.ISlashCommand) error {
+func (b *Bot) addApplicationCommand(guildID string, cmd *slashcmd.ISlashCommand) (appCmd *discordgo.ApplicationCommand, err error) {
 	id := b.session.State.User.ID
-	appCmd := slashcmd.ToApplicationCommand(*cmd)
-	_, err := b.session.ApplicationCommandCreate(id, guildID, appCmd)
+	appCmd = slashcmd.ToApplicationCommand(*cmd)
+	appCmd, err = b.session.ApplicationCommandCreate(id, guildID, appCmd)
 	if err != nil {
-		return err
+		return
 	}
 
 	b.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		(*cmd).Handle(s, i)
 	})
 
-	return nil
+	return
 }
 
 func (b *Bot) AddSlashCommand(cmd slashcmd.ISlashCommand) {
