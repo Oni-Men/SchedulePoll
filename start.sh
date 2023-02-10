@@ -1,3 +1,3 @@
-export TOKEN=`cat .token`
-export GUILD=`cat .guild`
-go run cmd/runner.go -token=$TOKEN -guild=$GUILD
+export DISCORD_BOT_TOKEN=`cat .token`
+export CLEANUP_CMDS="true"
+go run cmd/schedulepoll/main.go
