@@ -2,10 +2,6 @@ package slashcmd
 
 import "github.com/bwmarrin/discordgo"
 
-const (
-	PollCreateModal = "meetme.poll-create-modal"
-)
-
 type ISlashCommand interface {
 	ID() string
 	Name() string

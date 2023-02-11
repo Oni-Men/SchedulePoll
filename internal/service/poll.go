@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/Oni-Men/SchedulePoll/internal/bot"
+	"github.com/Oni-Men/SchedulePoll/internal/model"
 	"github.com/Oni-Men/SchedulePoll/internal/model/modal"
 	"github.com/Oni-Men/SchedulePoll/internal/model/poll"
-	"github.com/Oni-Men/SchedulePoll/internal/slashcmd"
 	"github.com/Oni-Men/SchedulePoll/pkg/dateparser"
 	"github.com/Oni-Men/SchedulePoll/pkg/emoji"
 	"github.com/Oni-Men/SchedulePoll/pkg/timeutil"
@@ -40,15 +40,70 @@ func (ps *PollService) Init() {
 }
 
 func (p *PollService) BindHandlers() {
-	p.bot.AddHandler(p.handleInteractionCreate)
+	p.bot.AddComponentHandler(model.PollCreateButton, p.handleCreateButton)
+	p.bot.AddModalHandler(model.PollCreateModal, p.handleModalSubmit)
 	p.bot.AddHandler(p.handleReactionAdd)
 	p.bot.AddHandler(p.handleReactionRemove)
 }
 
-func (ps *PollService) handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	switch i.Type {
-	case discordgo.InteractionModalSubmit:
-		go ps.handleModalSubmit(s, i)
+func (ps *PollService) handleCreateButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: model.PollCreateModal,
+			Title:    "MeetMe Form",
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:  "poll-title",
+							Label:     "Summary",
+							Style:     discordgo.TextInputShort,
+							Required:  true,
+							MaxLength: 50,
+						},
+					},
+				},
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:  "poll-description",
+							Label:     "Description",
+							Style:     discordgo.TextInputParagraph,
+							Required:  false,
+							MaxLength: 500,
+							MinLength: 0,
+						},
+					},
+				},
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:    "poll-due",
+							Label:       "Due",
+							Style:       discordgo.TextInputShort,
+							Placeholder: time.Now().AddDate(0, 0, 7).Format("2006/1/2 15:04"),
+							Required:    false,
+							MaxLength:   16,
+						},
+					},
+				},
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:  "poll-date-list",
+							Label:     "Candidates",
+							Style:     discordgo.TextInputParagraph,
+							Required:  true,
+							MaxLength: 500,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Println(err)
 	}
 }
 
@@ -64,7 +119,7 @@ func (ps *PollService) handleModalSubmit(s *discordgo.Session, i *discordgo.Inte
 		log.Println("error responding to modal submi: " + err.Error())
 	}
 
-	if data.CustomID != slashcmd.PollCreateModal {
+	if data.CustomID != model.PollCreateModal {
 		s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{{
 				Title:       "エラー",
@@ -114,10 +169,16 @@ func (ps *PollService) handleModalSubmit(s *discordgo.Session, i *discordgo.Inte
 	ps.pollManager.AddPoll(p)
 	embed := PrintPoll(p)
 
-	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Content: fmt.Sprintf("@here, <@%s> がスケジュール調整アンケートを作成しました", i.Interaction.Member.User.ID),
-		Embeds:  []*discordgo.MessageEmbed{embed},
+	text := fmt.Sprintf("%sがスケジュール調整アンケートを作成しました", i.Interaction.Member.Mention())
+	msg, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &text,
+		Embeds:  &[]*discordgo.MessageEmbed{embed},
 	})
+
+	// msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+	// 	Content: fmt.Sprintf("<@%s> がスケジュール調整アンケートを作成しました", i.Interaction.Member.User.ID),
+	// 	Embeds:  []*discordgo.MessageEmbed{embed},
+	// })
 	if err != nil {
 		go s.ChannelMessageSendEmbed(i.ChannelID, &discordgo.MessageEmbed{
 			Title:       "エラー",

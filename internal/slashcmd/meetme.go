@@ -1,9 +1,11 @@
 package slashcmd
 
 import (
+	"fmt"
 	"log"
-	"time"
 
+	"github.com/Oni-Men/SchedulePoll/internal/model"
+	"github.com/Oni-Men/SchedulePoll/pkg/emoji"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -32,55 +34,34 @@ func (cmd *MeetmeCommand) Options() []*discordgo.ApplicationCommandOption {
 }
 
 func (cmd *MeetmeCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Member == nil {
+		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "You can't use this command here",
+			},
+		})
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseModal,
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			CustomID: PollCreateModal,
-			Title:    "MeetMe Form",
+			Flags:   discordgo.MessageFlagsEphemeral,
+			Content: fmt.Sprintf("%s, Click the button below to create new poll", i.Member.Mention()),
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
-						discordgo.TextInput{
-							CustomID:  "poll-title",
-							Label:     "Summary",
-							Style:     discordgo.TextInputShort,
-							Required:  true,
-							MaxLength: 50,
-						},
-					},
-				},
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						discordgo.TextInput{
-							CustomID:  "poll-description",
-							Label:     "Description",
-							Style:     discordgo.TextInputParagraph,
-							Required:  false,
-							MaxLength: 500,
-							MinLength: 0,
-						},
-					},
-				},
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						discordgo.TextInput{
-							CustomID:    "poll-due",
-							Label:       "Due",
-							Style:       discordgo.TextInputShort,
-							Placeholder: time.Now().AddDate(0, 0, 7).Format("2006/1/2 15:04"),
-							Required:    false,
-							MaxLength:   16,
-						},
-					},
-				},
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						discordgo.TextInput{
-							CustomID:  "poll-date-list",
-							Label:     "Candidates",
-							Style:     discordgo.TextInputParagraph,
-							Required:  true,
-							MaxLength: 500,
+						discordgo.Button{
+							CustomID: model.PollCreateButton,
+							Label:    "New poll",
+							Style:    discordgo.PrimaryButton,
+							Emoji: discordgo.ComponentEmoji{
+								Name: emoji.Calendar,
+							},
 						},
 					},
 				},
